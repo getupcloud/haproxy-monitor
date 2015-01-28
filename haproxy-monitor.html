@@ -179,25 +179,45 @@
 			}
 
 			this.createGear = function(name, index) {
+				function calcDelta(a, b) {
+					var deltaTime = (b[0] - a[0]) / 1000;
+					var deltaReqs = b[1] - a[1];
+					b[2] = parseInt(deltaReqs / deltaTime );
+					return b;
+				};
 				var gear = {
 					index: index,
 					name: name,
 					data: [],
+					init_data: [], //store first pair of data to calc first average
 					push: function(timestamp, value) {
-						if (this.data.length == totalPoints)
-							this.data = this.data.slice(1);
-						this.data.push([ timestamp, value ]);
+						if (this.init_data !== null) {
+							if (this.init_data.length < 2) {
+								this.init_data.push([ timestamp, value, null]);
+								return;
+							} else {
+								var a = this.init_data[0];
+								var b = this.init_data[1];
+								this.init_data = null;
+							}
+						} else {
+							var a = this.data[this.data.length - 1];
+							var b = [ timestamp, value, null];
+						}
+						this.data.push(calcDelta(a, b));
+						this.data = this.data.slice(1);
+						return this.data[this.data.length - 1];
 					},
 					serie: function() {
-						return this.data;
+						//return this.data;
 						return this.data.map(function(value, index) {
-							return value;
+							return [ value[0], value[2] ];
 						});
 					}
 				};
 
 				for (var i = 0; i < totalPoints; i++) {
-					gear.push(null, null);
+					gear.data.push([ null, null, null]);
 				}
 				return gear;
 			};
@@ -235,7 +255,7 @@
 						backgroundOpacity: 0.5,
 					},
 					yaxis: {
-						min: 0,
+						min: -1,
 						max: this.state.roof + 5
 					},
 					xaxis: {
@@ -256,15 +276,13 @@
 						return;
 
 					var gear = this.getGear(fields[1]);
-					var y = parseFloat(fields[4]);
-					if (y < 0) {
-						y = 0;
-					} else if (y > this.state.roof) {
-						this.state.roof = y;
+					var y = Math.max(parseFloat(fields[7]), 0);
+					var latest = gear.push(now, y);
+					if (latest && latest[2] > this.state.roof) {
+						this.state.roof = latest[2];
 						this.state.needRefresh = true;
 					}
-
-					gear.push(now, y);
+			
 				}.bind(this));
 
 				var oldSeries = this.series.map(function(serie) { return serie.label; }).sort();
